@@ -1,0 +1,48 @@
+version: "2"
+
+services:
+  postgresdb:
+      image: postgres:11
+      environment:
+        - POSTGRES_USER=${DB_BUILD_USER}
+        - POSTGRES_PASSWORD=${DB_BUILD_PASS}
+        - POSTGRES_DB=${DB_BUILD_NAME}
+      ports:
+        - '5432:5432'
+      user: "$USER_ID"
+      volumes:
+          - ./database:/var/lib/postgresql/data
+          - ./bkup:/bkup
+          - /etc/passwd:/etc/passwd:ro
+  djangoapi:
+    build:
+      context: ./python_build
+      args:
+          - USER_ID=$USER_ID
+    command: sh -c 'git clone https://github.com/yeisonlegarda/inventarios_api.git;sudo chown -R user:user inventarios_api;cd inventarios_api;git pull origin master;python manage.py wait_for_db && python manage.py runserver 0.0.0.0:8000;'
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./workspace/python:/workspace/python
+    user: "$USER_ID"
+    environment:
+      - DB_HOST=postgresdb
+      - DB_NAME=${DB_BUILD_NAME}
+      - DB_USER=${DB_BUILD_USER}
+      - DB_PASS=${DB_BUILD_PASS}
+    depends_on:
+      - postgresdb
+  client:
+    build:
+      context: ./angular_build
+      args:
+        - USER_ID=$USER_ID
+    command: sh -c 'git clone https://github.com/yeisonlegarda/inventarionsFront.git;cd inventarionsFront;git pull origin master;npm dedupe;npm install;ng update @angular/compiler;ng serve --host 0.0.0.0'
+    ports:
+      - '4200:4200'
+      - '35729:35729'
+    volumes:
+      - ./workspace/angular:/workspace/angular
+    user: "$USER_ID"
+    depends_on:
+      - djangoapi
